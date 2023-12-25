@@ -1,12 +1,22 @@
-import express from "express";
-import axios from "axios";
+import express, { Request, Response } from "express";
 import Parser from "rss-parser";
 
 const app = express();
 const port = process.env.PORT || 4000;
 
-app.get("/fetch-and-save-rss", async (req, res) => {
+interface RSSItem {
+	title: string | undefined;
+	link: string | undefined;
+}
+
+interface FeedResult {
+	title: string;
+	items: RSSItem[];
+}
+
+app.get("/fetch-rss-links", async (req: Request, res: Response) => {
 	try {
+		//TODO: Needs to take in URLS through req.
 		const rssUrls = [
 			"https://zillow.mediaroom.com/press-releases?pagetemplate=rss",
 			"https://feeds.feedburner.com/inmannews"
@@ -16,21 +26,26 @@ app.get("/fetch-and-save-rss", async (req, res) => {
 		const feedPromises = rssUrls.map((url) => parser.parseURL(url));
 		const feeds = await Promise.all(feedPromises);
 
-		feeds.forEach((feed) => {
-			console.log(`Feed Title: ${feed.title}`);
-			feed.items.forEach((item) => {
-				console.log(`- ${item.title}: ${item.link}`);
-			});
+		const feedResults: FeedResult[] = feeds.map((feed) => {
+			const items: RSSItem[] = feed.items
+				.filter((item) => item.title && item.link)
+				.map((item) => ({
+					title: item.title as string,
+					link: item.link as string
+				}));
+
+			return {
+				title: feed.title || "Unknown Title",
+				items: items
+			};
 		});
 
-		res
-			.status(200)
-			.json({ message: "RSS feeds fetched and saved successfully" });
+		res.status(200).json(feedResults);
 	} catch (error) {
 		console.error(error);
-		res
-			.status(500)
-			.json({ error: "An error occurred while fetching and saving RSS feeds" });
+		res.status(500).json({
+			error: "An error occurred while fetching and saving RSS feeds"
+		});
 	}
 });
 
